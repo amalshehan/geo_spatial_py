@@ -9,16 +9,21 @@ output_directory = "D:/ag.gdb/"  # Update with the directory where you want to s
 h3_tessellation_layer = "arcticHexRes5"  # Update with the name of your tessellation layer
 
 # Create an empty summary table to accumulate results
-summary_table = os.path.join(output_directory, "t")
+sum_table = os.path.join(output_directory, "t")
 
 # Check if the summary table exists, if not, create it
-if not arcpy.Exists(summary_table):
-    arcpy.CreateTable_management(output_directory, "summary_table")
+if not arcpy.Exists(sum_table):
+    arcpy.CreateTable_management(output_directory, "sum_table")
     arcpy.AddField_management(summary_table, "GRID_ID", "TEXT", field_length=50)
     arcpy.AddField_management(summary_table, "Sum_Area", "DOUBLE")
 
-arcpy.Delete_management("in_memory/temp_sum4")
-    
+# Print all field names in the summary table
+print("Field names in summary table:")
+for field in arcpy.ListFields(sum_table):
+    print(field.name)
+
+temp_sum4 = os.path.join(output_directory, "ts")    
+
 # Loop through each polygon shapefile in the directory
 shp_directory = "D:/IWP_ag/arcgis_test/"  # Update with the directory containing your polygon shapefiles
 for filename in os.listdir(shp_directory):
@@ -28,7 +33,7 @@ for filename in os.listdir(shp_directory):
         # Execute SummarizeWithin
         # Execute SummarizeWithin
         try:
-            arcpy.analysis.SummarizeWithin(h3_tessellation_layer, polygon_shp, "in_memory/temp_sum4", "ONLY_INTERSECTING", [["AREA", "SUM"]])
+            arcpy.analysis.SummarizeWithin(h3_tessellation_layer, polygon_shp, temp_sum4, "ONLY_INTERSECTING", [["AREA", "SUM"]])
             print(f"SummarizeWithin started for {filename}")
         except arcpy.ExecuteError:
             print(f"Failed to execute SummarizeWithin for {filename}:")
@@ -37,12 +42,15 @@ for filename in os.listdir(shp_directory):
 
         print(f"SummarizeWithin started for {filename}")
         
+        
         # Update the summary table with the results from the current shapefile
         try:
-            with arcpy.da.SearchCursor("temp_sum4", ["GRID_ID", "Sum_Area"]) as cursor:
-                print(u'{0}, {1},'.format(row[0], row[1]))
-                with arcpy.da.UpdateCursor(summary_table, ["GRID_ID", "Sum_Area"]) as update_cursor:
+            with arcpy.da.SearchCursor(temp_sum4, ["GRID_ID", "Sum_Area"]) as cursor:
+                print("Field names:", cursor.fields) 
+                with arcpy.da.UpdateCursor(sum_table, ["GRID_ID", "Sum_Area"]) as update_cursor:
+                    #print("Field names:", update_cursor.fields)  # Print field names
                     for row in cursor:
+                        print(u'{0}, {1},'.format(row[0], row[1]))
                         grid_id, sum_area = row
                         # Check if the H3_ID already exists in the summary table
                         row_found = False
@@ -53,8 +61,8 @@ for filename in os.listdir(shp_directory):
                                 row_found = True
                                 break
                         if not row_found:
-                            insert_row = (h3_id, sum_area)
-                            update_cursor.insertRow(insert_row)
+                            with arcpy.da.InsertCursor(sum_table, ["GRID_ID", "Sum_Area"]) as insert_cursor:
+                                insert_cursor.insertRow((grid_id, sum_area))              
         except arcpy.ExecuteError:
             print(arcpy.GetMessages())
 
@@ -63,4 +71,4 @@ for filename in os.listdir(shp_directory):
 print("SummarizeWithin for all shapefiles completed. Output saved to summary_all table.")
 
 # Clean up temporary table
-arcpy.Delete_management("in_memory/temp_sum4")
+arcpy.Delete_management(temp_sum4)
