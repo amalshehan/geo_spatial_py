@@ -4,21 +4,21 @@ H3 is a global grid indexing system and library developed by Uber to facilitate 
 The H3 system uses a hierarchical hexagonal grid to tessellate the Earth's surface, allowing for efficient 
 indexing and querying of spatial data at multiple levels of detail.
 
-Step 1
+**Step 1**
 Download the geopackage data from the Arctic Data Center(ADC). You can use the following script given as an example.
 Make sure you have sufficient space 
 
-wget -r -np -nH --cut-dirs=3 -R '\?C=' -R robots.txt https://arcticdata.io/data/10.18739/A2KW57K57/iwp_geopackage_high/WGS1984Quad/15/3776
+```wget -r -np -nH --cut-dirs=3 -R '\?C=' -R robots.txt https://arcticdata.io/data/10.18739/A2KW57K57/iwp_geopackage_high/WGS1984Quad/15/3776```
 
-Step 2
+**Step 2**
 Convert the geopackage (.gpkg) file to ArcGIS readable shapefile (efficient) compared to reading from ArcGIS
-ogr2ogr -f "ESRI Shapefile" ./arc_3776 3776/*.gpkg
+```ogr2ogr -f "ESRI Shapefile" ./arc_3776 3776/*.gpkg```
 
-Step 3
+**Step 3**
 Run the ArcPy Script for each (ex. 3776) batch of files
 
-Step 4
+**Step 4**
 Combine the summary table via a database join on the h3 Hex grid ID.
 
-Step 5
+**Step 5**
 Visualize if required!
