@@ -1,7 +1,8 @@
 # ArcPy Script to convert iwp shp files to sumerised table for aggregated counts 
 # INPUT : iwp shape files duplicates marked <staging_du=1>, h3_tessellation_layer
 # OUTPUT : Summery table with count for each Hexagonal cell in the h3_tessellation_layer
-#
+#          saved as csv file in the data directory with batch name prefixed
+#          For FINAL output csv files need to be joied on GRID ID with aggregation
 # Code is written to accumilate the counts for each run 
 # i.e. if you do not give a new name for Summery table it will start updating the existing table
 # When executing same shp file should not be processed twice
@@ -9,20 +10,36 @@
 import arcpy
 import os
 
+arcpy.env.workspace = None
+
 # Set the workspace and output directory
 #workspace = arcpy.env.workspace  # Use the current workspace
-output_directory = "D:/ag.gdb/"  # Where to save the results
 # An error was generated when the name of the file was longer due to a known issue in ArcGIS when executing SummerizeWithin
 
+data_directory="D:/IWP_ag3/"
+data_batch="arc_11"
+
+output_directory = "D:/"
+gdb_name = "ag.gdb"
+arcpy.CreateFileGDB_management(output_directory, gdb_name)
+output_directory = "D:/ag.gdb/"  # Where to save the results
 # Create a new geodatabase if it doesn't exist
-if not arcpy.Exists(output_directory):
-    arcpy.CreateFileGDB_management(os.path.dirname(output_directory), os.path.basename(output_directory))
+#if not arcpy.Exists(output_directory):
+#    arcpy.CreateFileGDB_management(os.path.dirname(output_directory), os.path.basename(output_directory))
 
 # Set the workspace to the output directory
 arcpy.env.workspace = output_directory
 
+# Read the h3 hexagonal tessalation shp file 
+#h3_tessellation_layer = "D:/IWP_ag2/arctic_h3hex_res5.shp"  
+h3_tessellation_layer = os.path.join(data_directory,"h3_hex/arctic_h3hex_res5.shp")
+
+# Set the Directory containing polygon shapefiles to process
+#shp_directory = "D:/IWP_ag2/arc_test5/"  
+shp_directory = os.path.join(data_directory,data_batch)
+
 # Set the name of summery table new name to be given if you want a new run 
-sum_table = "t3"
+sum_table = "tt"
 
 # Check if the summary table exists, if not, create it
 if not arcpy.Exists(sum_table):
@@ -44,12 +61,12 @@ for field in arcpy.ListFields(sum_table):
     print(field.name)
     
 # Set the tessellation layer to for the summerized aggregations
-h3_tessellation_layer = "arcticHexRes5"  # Name of the tessellation layer already existing
+#h3_tessellation_layer = "arcticHexRes5"  # Name of the tessellation layer already existing
 
 ######################################################
 # Loop through each polygon shapefile in the directory
 ######################################################
-shp_directory = "D:/IWP_ag/arc_test4/"  # Directory containing polygon shapefiles
+#shp_directory = "D:/IWP_ag/arc_test5/"  # Directory containing polygon shapefiles
 for filename in os.listdir(shp_directory):
     temp_sum = os.path.join(output_directory, "ts") #temp summary layer to keep the sumerize within
     if filename.endswith(".shp"):
@@ -89,7 +106,9 @@ for filename in os.listdir(shp_directory):
             result = arcpy.GetCount_management(temp_sum)
             polygon_count = int(result.getOutput(0))
             print("Number of H3 Cells in summary:", polygon_count)
-   
+            arcpy.Delete_management("input_features_lyr")
+            arcpy.Delete_management("centroid_points_lyr")
+            print("tmp layers removed")
         except arcpy.ExecuteError:
             print(f"Failed to execute SummarizeWithin for {filename}:")
             print(arcpy.GetMessages())
@@ -114,14 +133,23 @@ for filename in os.listdir(shp_directory):
                                 row_found = True
                                 print("Updated:",grid_id, "with+:",sum_cnt)
                                 break
-                        if not row_found: # if not create new entry and add the row
+                        if not row_found: # if not create new entry and add the row                                                
                             with arcpy.da.InsertCursor(sum_table, ["GRID_ID", "Sum_Cnt"]) as insert_cursor:
-                                insert_cursor.insertRow((grid_id, sum_cnt))              
+                                try:
+                                    insert_cursor.insertRow((grid_id, sum_cnt))
+                                except Exception as e:
+                                    print(f"Error inserting row: {e}")
+                                #insert_cursor.insertRow((grid_id, sum_cnt))              
         except arcpy.ExecuteError:
             print(arcpy.GetMessages())
         print(f"SummarizeWithin completed for {filename}")
         # Clean up temporary layer
         arcpy.Delete_management(temp_sum)
+
+#sum_table_path = os.path.join(output_directory, "sum_table.csv")
+
+csv_file = os.path.join(data_directory,data_batch+".csv")
+arcpy.management.CopyRows(sum_table, csv_file)
 
 print("===========================================================")
 print("SummarizeWithin for all shapefiles completed. Output saved ")
@@ -130,3 +158,5 @@ with arcpy.da.SearchCursor(sum_table, ["GRID_ID", "Sum_Cnt"]) as search_cursor:
     print("Field names:", search_cursor.fields)  # Print field names
     for row in search_cursor:
         print(u'GRID_ID:{0}, iwp_cnt:{1},'.format(row[0], row[1]))
+        
+arcpy.env.workspace = None
